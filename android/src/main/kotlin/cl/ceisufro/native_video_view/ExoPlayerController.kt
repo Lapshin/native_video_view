@@ -49,6 +49,7 @@ class ExoPlayerController(private val id: Int,
     private var disposed: Boolean = false
     private var configured: Boolean = false
     private var playerState: PlayerState = PlayerState.NOT_INITIALIZED
+    private var currentPosition: Long = 0
 
     init {
         this.methodChannel.setMethodCallHandler(this)
@@ -193,7 +194,7 @@ class ExoPlayerController(private val id: Int,
             val mediaSource = ProgressiveMediaSource
                     .Factory(dataSourceFactory, DefaultExtractorsFactory())
                     .createMediaSource(uri)
-            this.exoPlayer.playWhenReady = false
+            this.exoPlayer.playWhenReady = true
             this.exoPlayer.prepare(mediaSource)
             this.dataSource = dataSource
         }
@@ -256,9 +257,14 @@ class ExoPlayerController(private val id: Int,
 
     override fun onPlayerStateChanged(playWhenReady: Boolean, playbackState: Int) {
         if (playbackState == Player.STATE_ENDED) {
-            stopPlayback()
+//            currentPosition = exoPlayer.getDuration() - 100
+            Log.d("EXOPLAYER", "AAAAAAAAa ${exoPlayer.getCurrentPosition()} ${exoPlayer.getDuration()}")
+            initVideo(this.dataSource)
+//            startPlayback()
+//            exoPlayer.seekTo(currentPosition)
             methodChannel.invokeMethod("player#onCompletion", null)
         } else if (playbackState == Player.STATE_READY) {
+            Log.d("EXOPLAYER", "Iam ready ${playerState} ${PlayerState.PLAY_WHEN_READY} ${currentPosition} ${exoPlayer.getCurrentPosition()} ${exoPlayer.getDuration()}")
             if (playerState == PlayerState.PLAY_WHEN_READY)
                 this.startPlayback()
             else

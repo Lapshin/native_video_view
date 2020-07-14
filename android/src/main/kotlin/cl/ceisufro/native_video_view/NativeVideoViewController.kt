@@ -4,6 +4,7 @@ import android.app.Activity
 import android.app.Application
 import android.media.MediaPlayer
 import android.os.Bundle
+import android.net.Uri
 import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
@@ -21,7 +22,7 @@ import io.flutter.plugin.common.PluginRegistry
 import io.flutter.plugin.platform.PlatformView
 import java.util.*
 import java.util.concurrent.atomic.AtomicInteger
-
+import java.io.File
 
 class NativeVideoViewController(private val id: Int,
                                 activityState: AtomicInteger,
@@ -40,6 +41,10 @@ class NativeVideoViewController(private val id: Int,
     private var disposed: Boolean = false
     private var configured: Boolean = false
     private var playerState: PlayerState = PlayerState.NOT_INITIALIZED
+    private var videoSourceURI: Uri? = null
+    private var completionTime: Int = 0
+    private var videoDurationLast: Int = 0
+    private var videoDuration: Int = 0
 
     init {
         this.methodChannel.setMethodCallHandler(this)
@@ -90,6 +95,12 @@ class NativeVideoViewController(private val id: Int,
             "player#setVideoSource" -> {
                 val videoPath: String? = call.argument("videoSource")
                 val sourceType: String? = call.argument("sourceType")
+                val _videoDuration: Int? = call.argument("videoDuration")
+                if (_videoDuration != null) {
+                    videoDuration = _videoDuration
+                }
+                Log.d("LAPSHIN", "videoDuration ${videoDuration}")
+                videoDurationLast = 0
                 if (videoPath != null) {
                     if (sourceType.equals("VideoSourceType.asset")
                             || sourceType.equals("VideoSourceType.file")) {
@@ -98,6 +109,7 @@ class NativeVideoViewController(private val id: Int,
                         initVideo(videoPath)
                     }
                 }
+                videoSourceURI = Uri.fromFile(File(videoPath))
                 result.success(null)
             }
             "player#start" -> {
@@ -211,8 +223,11 @@ class NativeVideoViewController(private val id: Int,
     }
 
     override fun onCompletion(mediaPlayer: MediaPlayer?) {
-        stopPlayback()
-        methodChannel.invokeMethod("player#onCompletion", null)
+        Log.d("LAPSHIN", "Position ${mediaPlayer?.getCurrentPosition()} ${videoView.getDuration()}")
+        completionTime = System.currentTimeMillis().toInt()
+        videoDurationLast = videoView.getDuration()
+        videoView.setVideoURI(videoSourceURI)
+//        methodChannel.invokeMethod("player#onCompletion", null)
     }
 
     override fun onError(mediaPlayer: MediaPlayer?, what: Int, extra: Int): Boolean {
@@ -226,10 +241,20 @@ class NativeVideoViewController(private val id: Int,
     }
 
     override fun onPrepared(mediaPlayer: MediaPlayer?) {
-        if (playerState == PlayerState.PLAY_WHEN_READY)
-            this.startPlayback()
-        else
-            notifyPlayerPrepared(mediaPlayer)
+        if (videoDurationLast == 0) {
+            if (playerState != PlayerState.PLAY_WHEN_READY) {
+                notifyPlayerPrepared(mediaPlayer)
+            }
+        } else {
+            Log.d("LAPSHIN", "videoDurationLast ${videoDurationLast} videoDuration - 1500 ${videoDuration - 1500}")
+            if (videoDurationLast < videoDuration - 500) {
+                videoView.seekTo((videoDurationLast).toInt())
+            } else {
+                mediaPlayer!!.setLooping(true)
+            }
+            Log.d("LAPSHIN", "AAAAAAAAa $videoDurationLast ${videoView.getDuration()}")
+            videoView.start()
+        }
     }
 
     private fun notifyPlayerPrepared(mediaPlayer: MediaPlayer?) {
